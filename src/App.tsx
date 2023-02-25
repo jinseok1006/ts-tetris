@@ -1,13 +1,29 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import produce from 'immer';
 import styled, { css } from 'styled-components';
+
+import Header from './components/Header';
+
+interface ActivedCell {
+  isActive: true;
+  isFlowing: boolean;
+}
+
+interface BlankCell {
+  isActive: false;
+  isFlowing: false;
+}
+
+type CellBlock = ActivedCell | BlankCell;
 
 interface Cell {
   row: number;
   col: number;
-  block: boolean;
+  block: ActivedCell | BlankCell;
 }
 
+// 빈셀은 항상 이 객체를 참조하는 것으로 렌더링을 피한다.
+const setCellBlank = () => blankCell;
 const BOARD_WIDTH = 350;
 
 const COL_MAX = 10;
@@ -32,39 +48,25 @@ const BoardBlock = styled.div`
   }
 `;
 
-const HeaderBlock = styled.div`
-  text-align: center;
-`;
-
 const initCell = (row: number, col: number): Cell => ({
   col,
   row,
-  block: false,
+  block: {
+    isActive: false,
+    isFlowing: false,
+  },
 });
+
+const blankCell: BlankCell = {
+  isActive: false,
+  isFlowing: false,
+};
 
 const initBoard: Cell[][] = Array.from({ length: ROW_MAX }, (_, i) =>
   Array.from({ length: COL_MAX }, (_, j) => initCell(i, j))
 );
 
-// Header는 memo한다고해도 이득이 없으므로 쓰지 않는다.
-const Header = ({
-  running,
-  cells,
-  onToggleRun,
-}: {
-  running: boolean;
-  cells: number;
-  onToggleRun: () => void;
-}) => {
-  return (
-    <HeaderBlock>
-      <h1>{cells}</h1>
-      <h2 onClick={onToggleRun}>running:{running ? 'true' : 'false'}</h2>
-    </HeaderBlock>
-  );
-};
-
-const TETIRS_BLOCKS = [
+const TETROMINO = [
   [
     // 1번
     [1, 1, 1, 1],
@@ -78,57 +80,52 @@ export default function App() {
   const [running, setRunning] = useState(true);
   const [board, setBoard] = useState(initBoard);
 
-  const cells = useMemo(() => countBoardCell(board), [board]);
-  console.log('App rerender!');
+  // 항상 board가 바뀌기때문에 memo를 쓰는것은 손해다
+  const cells = countBoardCell(board);
 
-  const onToggle = (rowInput: number, colInput: number) => {
-    console.log(rowInput, colInput);
-    setBoard(
-      produce((draft) => {
-        draft[rowInput][colInput].block = !draft[rowInput][colInput].block;
-      })
-    );
-  };
   const onToggleRun = () => setRunning(!running);
-
-  const createBlocks = () =>
-    setBoard(
-      produce((draft) => {
-        const ROW = 0,
-          COL = 3;
-        draft[ROW][COL].block = true;
-      })
-    );
 
   // useEffect에서 언제 cleanup함수가 실행되는가?
   // deps의 변화가 cleanup을 호출한다.
+  // 함수가 변수의 최근상태를 참조하지 못한다...
   useEffect(() => {
     let requestId: number;
 
     // setTimeout(createBlocks, 500);
 
     const gameLoop = () => {
-      updateBoard();
-
       if (running) {
+        updateBoard();
         requestId = setTimeout(gameLoop, 1000);
       }
     };
 
     gameLoop();
 
-    return () => clearTimeout(requestId);
+    return () => {
+      console.log('clearTimeout!');
+      clearTimeout(requestId);
+    };
   }, [running]);
 
-  const updateBoard = () => {
+  const createBlock = () => {
+    const ROW = 0,
+      COL = 3;
+
     setBoard(
       produce((draft) => {
-        for (let i = ROW_MAX - 1; i >= 0; i--) {
-          for (let j = 0; j < COL_MAX; j++) {
-            if (i === 0) {
-              draft[i][j] = initCell(0, j);
+        for (let i = 0; i < 4; i++) {
+          for (let j = 0; j < 4; j++) {
+            if (TETROMINO[0][i][j]) {
+              draft[ROW + i][COL + j].block = {
+                isActive: true,
+                isFlowing: true,
+              };
             } else {
-              draft[i][j].block = draft[i - 1][j].block;
+              draft[ROW + i][COL + j].block = {
+                isActive: false,
+                isFlowing: false,
+              };
             }
           }
         }
@@ -136,31 +133,43 @@ export default function App() {
     );
   };
 
+  const updateBoard = () => {
+    setBoard(
+      produce((draft) => {
+        for (let i = ROW_MAX - 1; i >= 0; i--) {
+          for (let j = 0; j < COL_MAX; j++) {}
+        }
+      })
+    );
+  };
+
   return (
     <>
-      <Header cells={cells} running={running} onToggleRun={onToggleRun} />
-      <Board board={board} onToggle={onToggle} />
+      <Header
+        cells={cells}
+        running={running}
+        onToggleRun={onToggleRun}
+        createBlock={createBlock}
+      />
+      <Board board={board} />
     </>
   );
 }
 
 interface BoardProps {
   board: Cell[][];
-  onToggle: (r: number, c: number) => void;
 }
 
 // Board컴포넌트의 Props가 이전 렌더링때와 똑같다면
 // 렌더링하지말고 이전 렌더링 값을 그대로 이용해주세요.
-const Board = ({ board, onToggle }: BoardProps) => {
+const Board = ({ board }: BoardProps) => {
   console.log('board render!!');
 
   return (
     <>
       <BoardBlock>
         {board.map((row) =>
-          row.map((cell) => (
-            <Cell key={cell.col} cell={cell} onToggle={onToggle} />
-          ))
+          row.map((cell) => <Cell key={cell.col} cell={cell} />)
         )}
       </BoardBlock>
     </>
@@ -168,32 +177,28 @@ const Board = ({ board, onToggle }: BoardProps) => {
 };
 
 const CellBlock = styled.div`
-  ${({ block }: { block: boolean }) => css`
-    background-color: ${block ? 'red' : 'unset'};
+  ${({ isActive }: { isActive: boolean }) => css`
+    background-color: ${isActive ? 'red' : 'unset'};
   `}
 `;
 
 interface CellProps {
   cell: Cell;
-  onToggle: (r: number, c: number) => void;
 }
 
-const Cell = React.memo(({ cell, onToggle }: CellProps) => {
+const Cell = React.memo(({ cell }: CellProps) => {
+  console.log(cell);
   const { row, col } = cell;
   // console.log(`너.. ${row}-${col} 리렌더링?`);
-  return (
-    <CellBlock block={cell.block} onClick={() => onToggle(row, col)}>
-      {col}
-    </CellBlock>
-  );
+  return <CellBlock isActive={cell.block.isActive}>{col}</CellBlock>;
 });
 
 // 리렌더 체크용
 function countBoardCell(board: Cell[][]) {
-  console.log(`count!`);
+  // console.log(`count!`);
   return board.reduce(
     (pre, row) =>
-      pre + row.reduce((pre, cell) => pre + (cell.block ? 1 : 0), 0),
+      pre + row.reduce((pre, cell) => pre + (cell.block.isActive ? 1 : 0), 0),
     0
   );
 }
