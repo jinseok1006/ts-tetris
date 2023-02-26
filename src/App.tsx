@@ -4,30 +4,28 @@ import styled, { css } from 'styled-components';
 
 import Header from './components/Header';
 
-interface ActivedCell {
+interface ActivedBlock {
   isActive: true;
   isFlowing: boolean;
 }
 
-interface BlankCell {
+interface BlankBlock {
   isActive: false;
   isFlowing: false;
 }
 
-type CellBlock = ActivedCell | BlankCell;
+type CellBlock = ActivedBlock | BlankBlock;
 
 interface Cell {
   row: number;
   col: number;
-  block: ActivedCell | BlankCell;
+  block: CellBlock;
 }
 
-// 빈셀은 항상 이 객체를 참조하는 것으로 렌더링을 피한다.
-const setCellBlank = () => blankCell;
 const BOARD_WIDTH = 350;
 
-const COL_MAX = 10;
-const ROW_MAX = 20;
+const COL_MAX = 3;
+const ROW_MAX = 5;
 
 const BoardBlock = styled.div`
   width: ${BOARD_WIDTH}px;
@@ -48,27 +46,25 @@ const BoardBlock = styled.div`
   }
 `;
 
-const initCell = (row: number, col: number): Cell => ({
-  col,
-  row,
-  block: {
-    isActive: false,
-    isFlowing: false,
-  },
-});
-
-const blankCell: BlankCell = {
+// 빈셀은 항상 이 객체를 참조하는 것으로 렌더링을 피한다.
+const blankBlock: BlankBlock = {
   isActive: false,
   isFlowing: false,
 };
+
+const initCell = (row: number, col: number): Cell => ({
+  col,
+  row,
+  block: blankBlock,
+});
 
 const initBoard: Cell[][] = Array.from({ length: ROW_MAX }, (_, i) =>
   Array.from({ length: COL_MAX }, (_, j) => initCell(i, j))
 );
 
 const TETROMINO = [
+  // 1번
   [
-    // 1번
     [1, 1, 1, 1],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
@@ -79,6 +75,8 @@ const TETROMINO = [
 export default function App() {
   const [running, setRunning] = useState(true);
   const [board, setBoard] = useState(initBoard);
+
+  // console.log(board[0][0].block === board[1][0].block);
 
   // 항상 board가 바뀌기때문에 memo를 쓰는것은 손해다
   const cells = countBoardCell(board);
@@ -95,7 +93,7 @@ export default function App() {
 
     const gameLoop = () => {
       if (running) {
-        updateBoard();
+        setBoard((board) => getNewBoard(board));
         requestId = setTimeout(gameLoop, 1000);
       }
     };
@@ -133,15 +131,35 @@ export default function App() {
     );
   };
 
-  const updateBoard = () => {
-    setBoard(
-      produce((draft) => {
-        for (let i = ROW_MAX - 1; i >= 0; i--) {
-          for (let j = 0; j < COL_MAX; j++) {}
+  const getNewBoard = (board: Cell[][]) => {
+    const newBoard = produce(board, (draft) => {
+      for (let i = ROW_MAX - 1; i >= 0; i--) {
+        for (let j = 0; j < COL_MAX; j++) {
+          if (i === 0) {
+            draft[i][j].block = blankBlock;
+          } else {
+            draft[i][j].block = draft[i - 1][j].block;
+          }
         }
-      })
-    );
+      }
+    });
+
+    return newBoard;
   };
+
+  const getNewBoardWithoutImmer = (board: Cell[][]) => {
+    const newBoard = board.map((row) => row.map((cell) => cell));
+
+    return newBoard;
+  };
+
+  let legacyCell: Cell = board[2][0];
+  useEffect(() => {
+    console.log(legacyCell === board[2][0]);
+    legacyCell = board[2][0];
+  }, [board]);
+
+  // 아니 근데 왜 렌더링하는거냐고..
 
   return (
     <>
@@ -161,7 +179,7 @@ interface BoardProps {
 }
 
 // Board컴포넌트의 Props가 이전 렌더링때와 똑같다면
-// 렌더링하지말고 이전 렌더링 값을 그대로 이용해주세요.
+// 렌더링하지말고 이전 렌더링 값을 그대로 이용해  주세요.
 const Board = ({ board }: BoardProps) => {
   console.log('board render!!');
 
@@ -187,7 +205,6 @@ interface CellProps {
 }
 
 const Cell = React.memo(({ cell }: CellProps) => {
-  console.log(cell);
   const { row, col } = cell;
   // console.log(`너.. ${row}-${col} 리렌더링?`);
   return <CellBlock isActive={cell.block.isActive}>{col}</CellBlock>;
@@ -201,4 +218,19 @@ function countBoardCell(board: Cell[][]) {
       pre + row.reduce((pre, cell) => pre + (cell.block.isActive ? 1 : 0), 0),
     0
   );
+}
+
+function areEqual(prevState: CellProps, nextState: CellProps) {
+  const prevCell = prevState.cell,
+    nextCell = prevState.cell;
+  const keys = Object.keys(prevCell) as [];
+
+  for (const key of keys) {
+    console.log(prevCell[key] === nextCell[key]);
+    if (prevCell[key] !== nextCell[key]) {
+      return false;
+    }
+  }
+
+  return true;
 }
