@@ -24,8 +24,8 @@ interface Cell {
 
 const BOARD_WIDTH = 350;
 
-const COL_MAX = 3;
-const ROW_MAX = 5;
+const COL_MAX = 10;
+const ROW_MAX = 20;
 
 const BoardBlock = styled.div`
   width: ${BOARD_WIDTH}px;
@@ -47,7 +47,7 @@ const BoardBlock = styled.div`
 `;
 
 // 빈셀은 항상 이 객체를 참조하는 것으로 렌더링을 피한다.
-const blankBlock: BlankBlock = {
+const BLANK_BLOCK: BlankBlock = {
   isActive: false,
   isFlowing: false,
 };
@@ -55,12 +55,30 @@ const blankBlock: BlankBlock = {
 const initCell = (row: number, col: number): Cell => ({
   col,
   row,
-  block: blankBlock,
+  block: BLANK_BLOCK,
 });
 
 const initBoard: Cell[][] = Array.from({ length: ROW_MAX }, (_, i) =>
   Array.from({ length: COL_MAX }, (_, j) => initCell(i, j))
 );
+
+const getNewBlankCell = (rowInput: number, colInput: number): Cell => ({
+  row: rowInput,
+  col: colInput,
+  block: BLANK_BLOCK,
+});
+
+const compareBlock = (blockA: CellBlock, blockB: CellBlock): boolean => {
+  const keys = Object.keys(blockA) as (keyof CellBlock)[];
+
+  for (const key of keys) {
+    if (blockA[key] !== blockB[key]) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 const TETROMINO = [
   // 1번
@@ -76,20 +94,11 @@ export default function App() {
   const [running, setRunning] = useState(true);
   const [board, setBoard] = useState(initBoard);
 
-  // console.log(board[0][0].block === board[1][0].block);
-
-  // 항상 board가 바뀌기때문에 memo를 쓰는것은 손해다
   const cells = countBoardCell(board);
-
   const onToggleRun = () => setRunning(!running);
 
-  // useEffect에서 언제 cleanup함수가 실행되는가?
-  // deps의 변화가 cleanup을 호출한다.
-  // 함수가 변수의 최근상태를 참조하지 못한다...
   useEffect(() => {
     let requestId: number;
-
-    // setTimeout(createBlocks, 500);
 
     const gameLoop = () => {
       if (running) {
@@ -131,33 +140,57 @@ export default function App() {
     );
   };
 
-  const getNewBoard = (board: Cell[][]) => {
-    const newBoard = produce(board, (draft) => {
-      for (let i = ROW_MAX - 1; i >= 0; i--) {
-        for (let j = 0; j < COL_MAX; j++) {
-          if (i === 0) {
-            draft[i][j].block = blankBlock;
-          } else {
-            draft[i][j].block = draft[i - 1][j].block;
+  const getNewBoard = (board: Cell[][]): Cell[][] => {
+    // row는 복사, cell은 참조 형태로 newboard에 복사
+    const newBoard = board.map((row) => row.map((cell) => cell));
+
+    // 업데이트 하면서 절대 참조에 접근하여 수정X
+    for (let i = ROW_MAX - 1; i >= 0; i--) {
+      for (let j = 0; j < COL_MAX; j++) {
+        if (i === 0) {
+          // 활성화 되어있는 경우에 참조 끊기
+          if (newBoard[i][j].block.isActive) {
+            newBoard[i][j] = getNewBlankCell(i, j);
+          }
+        } else {
+          // 전과 블럭이 다르면 참조 끊기
+          if (!compareBlock(board[i - 1][j].block, board[i][j].block)) {
+            newBoard[i][j] = {
+              ...board[i][j],
+              block: { ...board[i - 1][j].block },
+            };
           }
         }
       }
-    });
+    }
 
     return newBoard;
   };
 
-  const getNewBoardWithoutImmer = (board: Cell[][]) => {
-    const newBoard = board.map((row) => row.map((cell) => cell));
+  // const getNewBoard = (board: Cell[][]) => {
+  //   const newBoard = produce(board, (draft) => {
+  //     for (let i = ROW_MAX - 1; i >= 0; i--) {
+  //       for (let j = 0; j < COL_MAX; j++) {
+  //         if (i === 0) {
+  //           draft[i][j].block = BLANK_BLOCK;
+  //         } else {
+  //           draft[i][j].block = draft[i - 1][j].block;
+  //         }
+  //       }
+  //     }
+  //   });
 
-    return newBoard;
-  };
+  // for (let i = 0; i < ROW_MAX; i++) {
+  //   for (let j = 0; j < COL_MAX; j++) {
+  //     console.log(
+  //       board[i][j] === newBoard[i][j],
+  //       board[i][j].block === newBoard[i][j].block
+  //     );
+  //   }
+  // }
 
-  let legacyCell: Cell = board[2][0];
-  useEffect(() => {
-    console.log(legacyCell === board[2][0]);
-    legacyCell = board[2][0];
-  }, [board]);
+  //   return newBoard;
+  // };
 
   // 아니 근데 왜 렌더링하는거냐고..
 
@@ -181,7 +214,7 @@ interface BoardProps {
 // Board컴포넌트의 Props가 이전 렌더링때와 똑같다면
 // 렌더링하지말고 이전 렌더링 값을 그대로 이용해  주세요.
 const Board = ({ board }: BoardProps) => {
-  console.log('board render!!');
+  // cell shallow equal 햇는데 왜 렌더링하는거지..?
 
   return (
     <>
@@ -204,9 +237,9 @@ interface CellProps {
   cell: Cell;
 }
 
-const Cell = React.memo(({ cell }: CellProps) => {
+const Cell = React.memo(function Cell({ cell }: CellProps) {
   const { row, col } = cell;
-  // console.log(`너.. ${row}-${col} 리렌더링?`);
+
   return <CellBlock isActive={cell.block.isActive}>{col}</CellBlock>;
 });
 
@@ -220,14 +253,19 @@ function countBoardCell(board: Cell[][]) {
   );
 }
 
-function areEqual(prevState: CellProps, nextState: CellProps) {
-  const prevCell = prevState.cell,
-    nextCell = prevState.cell;
-  const keys = Object.keys(prevCell) as [];
+function shallowEqual(objA: any, objB: any): boolean {
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
 
-  for (const key of keys) {
-    console.log(prevCell[key] === nextCell[key]);
-    if (prevCell[key] !== nextCell[key]) {
+  // Test for A's keys different from B.
+  for (let i = 0; i < keysA.length; i++) {
+    const currentKey = keysA[i];
+    console.log(currentKey, Object.is(objA[currentKey], objB[currentKey]));
+
+    if (
+      !Object.hasOwnProperty.call(objB, currentKey) ||
+      !Object.is(objA[currentKey], objB[currentKey])
+    ) {
       return false;
     }
   }
