@@ -69,6 +69,7 @@ const getNewBlankCell = (rowInput: number, colInput: number): Cell => ({
 });
 
 const compareBlock = (blockA: CellBlock, blockB: CellBlock): boolean => {
+  // 인덱스 시그니처 공부하기
   const keys = Object.keys(blockA) as (keyof CellBlock)[];
 
   for (const key of keys) {
@@ -97,6 +98,7 @@ export default function App() {
   const cells = countBoardCell(board);
   const onToggleRun = () => setRunning(!running);
 
+  // useEffect 클린업 함수 호출 조건 공부하기
   useEffect(() => {
     let requestId: number;
 
@@ -140,59 +142,50 @@ export default function App() {
     );
   };
 
-  const getNewBoard = (board: Cell[][]): Cell[][] => {
-    // row는 복사, cell은 참조 형태로 newboard에 복사
-    const newBoard = board.map((row) => row.map((cell) => cell));
+  // const getNewBoardWithECMA = (board: Cell[][]): Cell[][] => {
+  //   // row는 복사, cell은 "참조" 형태로 newBoard객체 생성
+  //   const newBoard = board.map((row) => row.map((cell) => cell));
 
-    // 업데이트 하면서 절대 참조에 접근하여 수정X
-    for (let i = ROW_MAX - 1; i >= 0; i--) {
-      for (let j = 0; j < COL_MAX; j++) {
-        if (i === 0) {
-          // 활성화 되어있는 경우에 참조 끊기
-          if (newBoard[i][j].block.isActive) {
-            newBoard[i][j] = getNewBlankCell(i, j);
-          }
-        } else {
-          // 전과 블럭이 다르면 참조 끊기
-          if (!compareBlock(board[i - 1][j].block, board[i][j].block)) {
-            newBoard[i][j] = {
-              ...board[i][j],
-              block: { ...board[i - 1][j].block },
-            };
-          }
-        }
-      }
-    }
-
-    return newBoard;
-  };
-
-  // const getNewBoard = (board: Cell[][]) => {
-  //   const newBoard = produce(board, (draft) => {
-  //     for (let i = ROW_MAX - 1; i >= 0; i--) {
-  //       for (let j = 0; j < COL_MAX; j++) {
-  //         if (i === 0) {
-  //           draft[i][j].block = BLANK_BLOCK;
-  //         } else {
-  //           draft[i][j].block = draft[i - 1][j].block;
+  //   // 업데이트 하면서 절대 참조에 접근하여 수정X
+  //   for (let i = ROW_MAX - 1; i >= 0; i--) {
+  //     for (let j = 0; j < COL_MAX; j++) {
+  //       if (i === 0) {
+  //         // 활성화 되어있는 경우에 참조 끊기
+  //         if (newBoard[i][j].block.isActive) {
+  //           newBoard[i][j] = getNewBlankCell(i, j);
+  //         }
+  //       } else {
+  //         // 전과 블럭이 다르면 참조 끊기
+  //         if (!compareBlock(board[i - 1][j].block, board[i][j].block)) {
+  //           newBoard[i][j] = {
+  //             ...board[i][j],
+  //             block: { ...board[i - 1][j].block },
+  //           };
   //         }
   //       }
   //     }
-  //   });
-
-  // for (let i = 0; i < ROW_MAX; i++) {
-  //   for (let j = 0; j < COL_MAX; j++) {
-  //     console.log(
-  //       board[i][j] === newBoard[i][j],
-  //       board[i][j].block === newBoard[i][j].block
-  //     );
   //   }
-  // }
 
   //   return newBoard;
   // };
 
-  // 아니 근데 왜 렌더링하는거냐고..
+  const getNewBoard = (board: Cell[][]): Cell[][] =>
+    produce(board, (draft) => {
+      for (let i = ROW_MAX - 1; i >= 0; i--) {
+        for (let j = 0; j < COL_MAX; j++) {
+          if (i === 0) {
+            if (board[i][j].block.isActive) {
+              draft[i][j].block = BLANK_BLOCK;
+            }
+          } else {
+            if (!compareBlock(board[i - 1][j].block, board[i][j].block)) {
+              // 어느 깊이의 객체든지 수정하면 루트 경로부터 참조를 바꾼다(객체를 새로 생성한다)
+              draft[i][j].block = draft[i - 1][j].block;
+            }
+          }
+        }
+      }
+    });
 
   return (
     <>
@@ -211,11 +204,7 @@ interface BoardProps {
   board: Cell[][];
 }
 
-// Board컴포넌트의 Props가 이전 렌더링때와 똑같다면
-// 렌더링하지말고 이전 렌더링 값을 그대로 이용해  주세요.
 const Board = ({ board }: BoardProps) => {
-  // cell shallow equal 햇는데 왜 렌더링하는거지..?
-
   return (
     <>
       <BoardBlock>
@@ -238,7 +227,7 @@ interface CellProps {
 }
 
 const Cell = React.memo(function Cell({ cell }: CellProps) {
-  const { row, col } = cell;
+  const { col } = cell;
 
   return <CellBlock isActive={cell.block.isActive}>{col}</CellBlock>;
 });
@@ -251,24 +240,4 @@ function countBoardCell(board: Cell[][]) {
       pre + row.reduce((pre, cell) => pre + (cell.block.isActive ? 1 : 0), 0),
     0
   );
-}
-
-function shallowEqual(objA: any, objB: any): boolean {
-  const keysA = Object.keys(objA);
-  const keysB = Object.keys(objB);
-
-  // Test for A's keys different from B.
-  for (let i = 0; i < keysA.length; i++) {
-    const currentKey = keysA[i];
-    console.log(currentKey, Object.is(objA[currentKey], objB[currentKey]));
-
-    if (
-      !Object.hasOwnProperty.call(objB, currentKey) ||
-      !Object.is(objA[currentKey], objB[currentKey])
-    ) {
-      return false;
-    }
-  }
-
-  return true;
 }
