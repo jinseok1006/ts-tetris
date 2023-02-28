@@ -6,12 +6,12 @@ import Header from './components/Header';
 
 interface ActivedBlock {
   isActive: true;
-  isFlowing: boolean;
+  isFixed: boolean;
 }
 
 interface BlankBlock {
   isActive: false;
-  isFlowing: false;
+  isFixed: false;
 }
 
 type CellBlock = ActivedBlock | BlankBlock;
@@ -21,6 +21,8 @@ interface Cell {
   col: number;
   block: CellBlock;
 }
+
+// 블럭의 상태가 정의가 안되었다..
 
 const BOARD_WIDTH = 350;
 
@@ -49,7 +51,7 @@ const BoardBlock = styled.div`
 // 빈셀은 항상 이 객체를 참조하는 것으로 렌더링을 피한다.
 const BLANK_BLOCK: BlankBlock = {
   isActive: false,
-  isFlowing: false,
+  isFixed: false,
 };
 
 const initCell = (row: number, col: number): Cell => ({
@@ -69,7 +71,6 @@ const getNewBlankCell = (rowInput: number, colInput: number): Cell => ({
 });
 
 const compareBlock = (blockA: CellBlock, blockB: CellBlock): boolean => {
-  // 인덱스 시그니처 공부하기
   const keys = Object.keys(blockA) as (keyof CellBlock)[];
 
   for (const key of keys) {
@@ -98,7 +99,6 @@ export default function App() {
   const cells = countBoardCell(board);
   const onToggleRun = () => setRunning(!running);
 
-  // useEffect 클린업 함수 호출 조건 공부하기
   useEffect(() => {
     let requestId: number;
 
@@ -128,12 +128,12 @@ export default function App() {
             if (TETROMINO[0][i][j]) {
               draft[ROW + i][COL + j].block = {
                 isActive: true,
-                isFlowing: true,
+                isFixed: false,
               };
             } else {
               draft[ROW + i][COL + j].block = {
                 isActive: false,
-                isFlowing: false,
+                isFixed: false,
               };
             }
           }
@@ -169,6 +169,13 @@ export default function App() {
   //   return newBoard;
   // };
 
+  const test = (row: number, col: number): void => {
+    if (row === 1 && col === 3) {
+      console.log(board[row][col].block);
+    }
+  };
+
+  // 셀 윗부분만 필요한게 아니고 아랫부분도 필요함..
   const getNewBoard = (board: Cell[][]): Cell[][] =>
     produce(board, (draft) => {
       for (let i = ROW_MAX - 1; i >= 0; i--) {
@@ -178,10 +185,7 @@ export default function App() {
               draft[i][j].block = BLANK_BLOCK;
             }
           } else {
-            if (!compareBlock(board[i - 1][j].block, board[i][j].block)) {
-              // 어느 깊이의 객체든지 수정하면 루트 경로부터 참조를 바꾼다(객체를 새로 생성한다)
-              draft[i][j].block = draft[i - 1][j].block;
-            }
+            //
           }
         }
       }
@@ -227,9 +231,14 @@ interface CellProps {
 }
 
 const Cell = React.memo(function Cell({ cell }: CellProps) {
-  const { col } = cell;
+  const { isActive, isFixed } = cell.block;
 
-  return <CellBlock isActive={cell.block.isActive}>{col}</CellBlock>;
+  return (
+    <CellBlock isActive={cell.block.isActive}>
+      {isActive ? '1' : '0'}
+      {isFixed ? '1' : '0'}
+    </CellBlock>
+  );
 });
 
 // 리렌더 체크용
